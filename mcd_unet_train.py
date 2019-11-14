@@ -198,7 +198,7 @@ if drop_rate==0.0:
 #downsize the UNET for this example.
 #the smaller network is faster to train
 #and produces excellent results on the dataset at hand
-#nfilters = (nfilters/8).astype('int')
+nfilters = (nfilters/8).astype('int')
 
 #input
 input_tensor = Input(shape=IMG_SHAPE, name='input_tensor')
@@ -318,8 +318,9 @@ print(model.summary())
 
 #%% train the model
 #filepath = 'mcd_unet_31M_drop'+str(drop_rate)
-filepath = 'mcd_unet_31M_drop'+str(drop_rate)+'_mae'
+#filepath = 'mcd_unet_31M_drop'+str(drop_rate)+'_mae'
 #filepath = 'mcd_unet_div8_495K_drop'+str(drop_rate)
+filepath = 'mcd_unet_div8_495K_drop'+str(drop_rate)+'_mae'
 
 #save the model when val_loss improves during training
 checkpoint = ModelCheckpoint('./trained_models/'+filepath+'.hdf5', monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
