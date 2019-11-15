@@ -318,8 +318,8 @@ def get_gan(g_model, d_model, image_shape):
 #resize_factor_gen  = 0.1
 #resize_factor_dis  = 0.1
 
-resize_factor_gen  = 0.05
-resize_factor_dis  = 0.1
+resize_factor_gen  = 1.0
+resize_factor_dis  = 1.0
 
 gen_model = get_generator(image_shape=IMG_SHAPE, resize_factor=resize_factor_gen)
 dis_model = get_discriminator(image_shape=IMG_SHAPE, resize_factor=resize_factor_dis)
@@ -355,9 +355,10 @@ T_batch_true = np.ones((batch_size, patch_shape, patch_shape, 1))
 #get fake targets for the discriminator
 T_batch_fake = np.zeros((batch_size, patch_shape, patch_shape, 1))
 
-##for testing purposes
+#for testing purposes
 #n_epochs=5
-#batches_per_epoch=3
+#batches_per_epoch=10
+#print('WARNING, LEFT MANUAL NUMBER OF EPOCHS AND/OR BATCHES PER EPOCH')
 
 #create lists to keep statistics
 list_epochs=[]
@@ -374,7 +375,7 @@ list_val_gan_loss_mae=[]
 #initialize the best validation loss
 best_val_loss = np.Inf
 patience=0
-max_patience = 10 #epochs without improvement to wait
+max_patience = 20 #epochs without improvement to wait
 #actually start training for a fixed number of epochs
 #only the model instances that improve validation performance are saved to disk
 for e in range(n_epochs):
@@ -438,8 +439,12 @@ for e in range(n_epochs):
         best_val_loss = val_loss
         print('saving generator to '+'./trained_models/'+filepath+'.hdf5')
         gen_model.save('./trained_models/'+filepath+'.hdf5')
+        patience=0#reset patience since valid loss improved
     else:
         patience=patience+1
+    
+    #print statistics for this epoch
+    print('loss:',gan_loss_total.mean(),'val_loss:',val_loss)
     
     #% save training statistics
     od = OrderedDict()

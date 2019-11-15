@@ -70,8 +70,8 @@ for i in np.arange(n_images):
 
 #%% evaluate UNET with MAE loss
 
-modelname = 'pix2pix_genRF0.1_disRF0.1'
-model = load_model('./trained_models/pix2pix_genRF0.1_disRF0.1.hdf5')
+modelname = 'pix2pix_genRF1.0_disRF1.0'
+model = load_model('./trained_models/pix2pix_genRF1.0_disRF1.0.hdf5')
 Y_ts_hat = model.predict(X_ts)
 M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
 mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
