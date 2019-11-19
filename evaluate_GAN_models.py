@@ -30,8 +30,8 @@ def load_split_normalize_img(fname, target_size=(256,int(2*256))):
     By default resizes to 400x400 to make the image dimensions UNET-friendly
     '''
     from keras.preprocessing.image import load_img, img_to_array
-    #img = img_to_array(load_img(fname,color_mode='rgb',target_size=target_size))/255#normalize 8bit image to [0,1]
-    img = (img_to_array(load_img(fname,color_mode='rgb',target_size=target_size))-127.5)/127.5#normalize 8bit image to [-1,+1]
+    img = img_to_array(load_img(fname,color_mode='rgb',target_size=target_size))/255#normalize 8bit image to [0,1]
+#    img = (img_to_array(load_img(fname,color_mode='rgb',target_size=target_size))-127.5)/127.5#normalize 8bit image to [-1,+1]
     img_sat = img[:,:int(img.shape[1]/2),:]#get satellite image (left half)
     img_map = img[:,int(img.shape[1]/2):,:]#get map image (right half)
     return (img_sat, img_map)
@@ -68,15 +68,73 @@ Y_ts = np.zeros((n_images,)+IMG_SHAPE)
 for i in np.arange(n_images):
     X_ts[i,:,:,:], Y_ts[i,:,:,:] = load_split_normalize_img(fnames_ts[i])
 
-#%% evaluate UNET with MAE loss
+#%% specify resize factor
 
-modelname = 'pix2pix_genRF1.0_disRF1.0'
-model = load_model('./trained_models/pix2pix_genRF1.0_disRF1.0.hdf5')
+#resize_factor_gen  = 2.0
+#resize_factor_dis  = 2.0
+
+#resize_factor_gen  = 1.5
+#resize_factor_dis  = 1.5
+
+#resize_factor_gen  = 1.0
+#resize_factor_dis  = 1.0
+    
+#resize_factor_gen  = 0.5
+#resize_factor_dis  = 0.5
+
+resize_factor_gen  = 0.25
+resize_factor_dis  = 0.25
+
+#%% specify and evaluate model
+
+modelname = 'pix2pix_genRF'+str(np.round(resize_factor_gen,3))+'_disRF'+str(np.round(resize_factor_dis,3))
+model = load_model('./trained_models/'+modelname+'.hdf5')
 Y_ts_hat = model.predict(X_ts)
 M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
 mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
 
+#%% specify and evaluate model
+
+modelname = 'pix2pix_sigmoidOut_genRF'+str(np.round(resize_factor_gen,3))+'_disRF'+str(np.round(resize_factor_dis,3))
+model = load_model('./trained_models/'+modelname+'.hdf5')
+Y_ts_hat = model.predict(X_ts)
+M=np.abs(Y_ts-Y_ts_hat)
+mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
+
 #%%
+##%% evaluate pix2pix loss
+#
+#modelname = 'pix2pix_genRF0.5_disRF0.5'
+#model = load_model('./trained_models/pix2pix_genRF0.5_disRF0.5.hdf5')
+#Y_ts_hat = model.predict(X_ts)
+#M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
+#mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
+#
+##%% evaluate pix2pix loss
+#
+#modelname = 'pix2pix_genRF1.0_disRF1.0'
+#model = load_model('./trained_models/pix2pix_genRF1.0_disRF1.0.hdf5')
+#Y_ts_hat = model.predict(X_ts)
+#M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
+#mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
+#
+##%% evaluate pix2pix loss
+#
+#modelname = 'pix2pix_genRF1.5_disRF1.5'
+#model = load_model('./trained_models/pix2pix_genRF1.5_disRF1.5.hdf5')
+#Y_ts_hat = model.predict(X_ts)
+#M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
+#mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
+#
+##%% evaluate pix2pix loss
+#
+#modelname = 'pix2pix_genRF2.0_disRF2.0'
+#model = load_model('./trained_models/pix2pix_genRF2.0_disRF2.0.hdf5')
+#Y_ts_hat = model.predict(X_ts)
+#M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
+#mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
+
+#%% output in [-1,+1]
 fig, axes = plt.subplots(n_images,4,figsize=(4*4,n_images*4))
 for i in range(n_images):
     print(i)
@@ -107,3 +165,33 @@ for i in range(n_images):
     
 plt.savefig('./figures/'+modelname+'_MAE_'+str(np.round(mae_pixel,3))+'.png',bbox_inches='tight',dpi=100)
 
+#%% output in [0,1]
+fig, axes = plt.subplots(n_images,4,figsize=(4*4,n_images*4))
+for i in range(n_images):
+    print(i)
+    ax=axes[i,0]
+    ax.set_title('Satellite')
+    ax.imshow(X_ts[i,:,:,:])
+    #ax.set_xticks(np.arange(0,401,100))
+    #ax.set_yticks(np.arange(0,401,100))
+    
+    ax=axes[i,1]
+    ax.set_title('Map - True')
+    ax.imshow(Y_ts[i,:,:,:])
+    #ax.set_xticks(np.arange(0,401,100))
+    #ax.set_yticks(np.arange(0,401,100))
+    
+    ax=axes[i,2]
+    ax.set_title('Map - Predicted')
+    ax.imshow(Y_ts_hat[i,:,:,:])
+    #ax.set_xticks(np.arange(0,401,100))
+    #ax.set_yticks(np.arange(0,401,100))
+    
+    ax=axes[i,3]
+    ax.set_title('Map - Error: '+str(np.round(M[i,:,:,:].mean(axis=-1).flatten().mean(),3)))#averaged over channels and pixels
+    im = ax.imshow(M[i,:,:,:].mean(axis=-1),cmap='gray')
+    #ax.set_xticks(np.arange(0,401,100))
+    #ax.set_yticks(np.arange(0,401,100))
+    add_colorbar(im)
+    
+plt.savefig('./figures/'+modelname+'_MAE_'+str(np.round(mae_pixel,3))+'.png',bbox_inches='tight',dpi=100)

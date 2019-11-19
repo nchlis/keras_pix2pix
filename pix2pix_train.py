@@ -315,11 +315,20 @@ def get_gan(g_model, d_model, image_shape):
 
 #%% setup the models
 
-#resize_factor_gen  = 0.1
-#resize_factor_dis  = 0.1
+#resize_factor_gen  = 2.0
+#resize_factor_dis  = 2.0
 
-resize_factor_gen  = 1.0
-resize_factor_dis  = 1.0
+#resize_factor_gen  = 1.5
+#resize_factor_dis  = 1.5
+
+#resize_factor_gen  = 1.0
+#resize_factor_dis  = 1.0
+    
+#resize_factor_gen  = 0.5
+#resize_factor_dis  = 0.5
+
+resize_factor_gen  = 0.25
+resize_factor_dis  = 0.25
 
 gen_model = get_generator(image_shape=IMG_SHAPE, resize_factor=resize_factor_gen)
 dis_model = get_discriminator(image_shape=IMG_SHAPE, resize_factor=resize_factor_dis)
@@ -398,9 +407,11 @@ for e in range(n_epochs):
         dis_loss_true[b] = dis_model.train_on_batch([X_batch, Y_batch], T_batch_true)
         
         #get fake image pairs and labels
-        X_batch_fake = gen_model.predict(X_batch)
+        #X_batch_fake = gen_model.predict(X_batch)
+        Y_batch_fake = gen_model.predict(X_batch)
         #train discriminator on fake samples
-        dis_loss_fake[b] = dis_model.train_on_batch([X_batch_fake, Y_batch], T_batch_fake)
+        #dis_loss_fake[b] = dis_model.train_on_batch([X_batch_fake, Y_batch], T_batch_fake)
+        dis_loss_fake[b] = dis_model.train_on_batch([X_batch, Y_batch_fake], T_batch_fake)
         
         #train the gan
         #Note: the generator is only indirectly trained through the gan
