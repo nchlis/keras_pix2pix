@@ -34,6 +34,7 @@ from keras.callbacks import ModelCheckpoint
 from keras.callbacks import CSVLogger
 import time
 import skimage.transform
+from keras.models import load_model
 
 def rotateT(X,angle):
     #rotate image tensor, TF order, single channel
@@ -321,30 +322,23 @@ def get_gan(g_model, d_model, image_shape):
 #resize_factor_gen  = 1.5
 #resize_factor_dis  = 1.5
 
-#resize_factor_gen  = 1.0
-#resize_factor_dis  = 1.0
+resize_factor_gen  = 1.0
+resize_factor_dis  = 1.0
     
 #resize_factor_gen  = 0.5
 #resize_factor_dis  = 0.5
 
-resize_factor_gen  = 0.25
-resize_factor_dis  = 0.25
+#resize_factor_gen  = 0.25
+#resize_factor_dis  = 0.25
 
-gen_model = get_generator(image_shape=IMG_SHAPE, resize_factor=resize_factor_gen)
-dis_model = get_discriminator(image_shape=IMG_SHAPE, resize_factor=resize_factor_dis)
-gan_model = get_gan(g_model=gen_model, d_model=dis_model, image_shape=IMG_SHAPE)
+#%% set up model training parameters
 
-print(gen_model.summary())
-print(dis_model.summary())
-print(gan_model.summary())
-
-#filepath to save the model
-filepath = 'pix2pix_genRF'+str(np.round(resize_factor_gen,3))+'_disRF'+str(np.round(resize_factor_dis,3))
-
-#%% train the entire GAN model
-
-#define the batch size
-batch_size=1
+batch_size=1#define the batch size
+n_epochs=200#total number of epochs to train for
+save_epochs=25#save a model instance periodically every 'save_epochs'
+early_stopping=False
+max_patience = n_epochs#epochs without improvement to wait, only matters if early_stopping==True
+resume_training=True#resume training an existing model
 
 #generator to get training data
 gen_train = aug_generator(fnames_tr,batch_size=batch_size,flip_axes=['x','y'],rotation_angles=[5,15])
@@ -352,47 +346,100 @@ gen_train = aug_generator(fnames_tr,batch_size=batch_size,flip_axes=['x','y'],ro
 #generator to get validation data
 gen_val = aug_generator(fnames_val,batch_size=batch_size,flip_axes=['x','y'],rotation_angles=[5,15])
 
-# determine the output square shape of the discriminator
-patch_shape = dis_model.output_shape[1]
 # calculate the number of batches per training epoch
 batches_per_epoch = int(len(fnames_tr) / batch_size)
 batches_per_epoch_val = int(len(fnames_val) / batch_size)
-# calculate the number of training iterations
-n_epochs=200
-#get real targets for the discriminator
-T_batch_true = np.ones((batch_size, patch_shape, patch_shape, 1))
-#get fake targets for the discriminator
-T_batch_fake = np.zeros((batch_size, patch_shape, patch_shape, 1))
+
+#filepath to save the model
+filepath = 'pix2pix_RF'+str(np.round(resize_factor_gen,3))+'_disRF'+str(np.round(resize_factor_dis,3))+'_batchSize'+str(batch_size)+'_earlyStopping'+str(early_stopping)
+
+#%% train the model
 
 #for testing purposes
 #n_epochs=5
 #batches_per_epoch=10
 #print('WARNING, LEFT MANUAL NUMBER OF EPOCHS AND/OR BATCHES PER EPOCH')
 
-#create lists to keep statistics
-list_epochs=[]
-list_epoch_duration=[]#in seconds
-list_dis_loss=[]
-list_gan_loss_total=[]
-list_gan_loss_bce=[]
-list_gan_loss_mae=[]
+if resume_training == True:
+    print('resuming training')
+    df=pd.read_csv('./trained_models/'+filepath+'.csv')
+    epoch_start=df['epoch'].values[-1]
+    epoch_end=epoch_start+n_epochs
+    #create lists to keep statistics
+    list_epoch=df['epoch'].values.tolist()
+    list_epoch_duration=df['epoch_duration'].values.tolist()#in seconds
+    #training statistics
+    list_dis_loss_real=df['dis_loss_real'].values.tolist()
+    list_dis_loss_fake=df['dis_loss_fake'].values.tolist()
+    list_dis_loss_total=df['dis_loss_total'].values.tolist()
+    list_gan_loss_bce=df['gan_loss_bce'].values.tolist()
+    list_gan_loss_mae=df['gan_loss_mae'].values.tolist()
+    list_gan_loss_total=df['gan_loss_total'].values.tolist()
+    #validation statistics
+    list_val_gan_loss_bce=df['gan_loss_bce'].values.tolist()
+    list_val_gan_loss_mae=df['val_gan_loss_mae'].values.tolist()
+    list_val_gan_loss_total=df['val_gan_loss_total'].values.tolist()
+    #initialize the best validation loss
+    best_val_loss = df['val_gan_loss_mae'].min()
+    #load the models
+    gen_model = get_generator(image_shape=IMG_SHAPE, resize_factor=resize_factor_gen)
+    dis_model = get_discriminator(image_shape=IMG_SHAPE, resize_factor=resize_factor_dis)
+    gen_model.load_weights('./trained_models/'+'gen_'+filepath+'_last.hdf5')
+    dis_model.load_weights('./trained_models/'+'dis_'+filepath+'_last.hdf5')
+    gan_model = get_gan(g_model=gen_model, d_model=dis_model, image_shape=IMG_SHAPE)
+    # unfreeze the discriminator
+    dis_model.trainable=True
+    dis_model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.0002, beta_1=0.5), loss_weights=[0.5])
+    
+else:
+    print('training the model from scratch')
+    epoch_start=0
+    epoch_end=n_epochs
+    #create lists to keep statistics
+    list_epoch=[]
+    list_epoch_duration=[]#in seconds
+    #training statistics
+    list_dis_loss_real=[]
+    list_dis_loss_fake=[]
+    list_dis_loss_total=[]
+    list_gan_loss_bce=[]
+    list_gan_loss_mae=[]
+    list_gan_loss_total=[]
+    #validation statistics
+    list_val_gan_loss_bce=[]
+    list_val_gan_loss_mae=[]
+    list_val_gan_loss_total=[]
+    #initialize the best validation loss
+    best_val_loss = np.Inf
+    
+    gen_model = get_generator(image_shape=IMG_SHAPE, resize_factor=resize_factor_gen)
+    dis_model = get_discriminator(image_shape=IMG_SHAPE, resize_factor=resize_factor_dis)
+    gan_model = get_gan(g_model=gen_model, d_model=dis_model, image_shape=IMG_SHAPE)
+    # unfreeze
+    dis_model.trainable=True
+    dis_model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.0002, beta_1=0.5), loss_weights=[0.5])
 
-list_val_gan_loss_total=[]
-list_val_gan_loss_bce=[]
-list_val_gan_loss_mae=[]
+print(gen_model.summary())
+print(dis_model.summary())
+print(gan_model.summary())
 
-#initialize the best validation loss
-best_val_loss = np.Inf
-patience=0
-max_patience = 20 #epochs without improvement to wait
+# determine the output square shape of the discriminator
+patch_shape = dis_model.output_shape[1]
+#get real targets for the discriminator
+T_batch_true = np.ones((batch_size, patch_shape, patch_shape, 1))
+#get fake targets for the discriminator
+T_batch_fake = np.zeros((batch_size, patch_shape, patch_shape, 1))
+#initialize the patience parameter
+patience=10
 #actually start training for a fixed number of epochs
 #only the model instances that improve validation performance are saved to disk
-for e in range(n_epochs):
+for e in np.arange(epoch_start,epoch_end):
     start=time.time()
-    print('epoch',e+1,'of',n_epochs)
+    print()#print an empty line for readability
+    print('epoch',e+1,'of',epoch_start+n_epochs)
     
     #initialize epoch statistics for the training set
-    dis_loss_true=np.zeros(batches_per_epoch)
+    dis_loss_real=np.zeros(batches_per_epoch)
     dis_loss_fake=np.zeros(batches_per_epoch)
     gan_loss_total=np.zeros(batches_per_epoch)
     gan_loss_bce=np.zeros(batches_per_epoch)
@@ -404,7 +451,7 @@ for e in range(n_epochs):
         #get true image pairs and labels
         X_batch, Y_batch = next(gen_train)
         #train discriminator on true samples
-        dis_loss_true[b] = dis_model.train_on_batch([X_batch, Y_batch], T_batch_true)
+        dis_loss_real[b] = dis_model.train_on_batch([X_batch, Y_batch], T_batch_true)
         
         #get fake image pairs and labels
         #X_batch_fake = gen_model.predict(X_batch)
@@ -418,9 +465,9 @@ for e in range(n_epochs):
         gan_loss_total[b], gan_loss_bce[b], gan_loss_mae[b] = gan_model.train_on_batch(X_batch, [T_batch_true, Y_batch])
     
     #initialize epoch statistics for the validation set
-    val_gan_loss_total=np.zeros(batches_per_epoch_val)
     val_gan_loss_bce=np.zeros(batches_per_epoch_val)
     val_gan_loss_mae=np.zeros(batches_per_epoch_val)
+    val_gan_loss_total=np.zeros(batches_per_epoch_val)
     
     #evaluate on the validation set
     for b in range(batches_per_epoch_val):
@@ -430,26 +477,29 @@ for e in range(n_epochs):
     end=time.time()
     #keep statistics
     #training statistics
-    list_epochs.append(e+1)
+    list_epoch.append(e+1)
     list_epoch_duration.append(end-start)
-    list_dis_loss.append(dis_loss_true.mean()+dis_loss_fake.mean())
+    list_dis_loss_real.append(dis_loss_real.mean())
+    list_dis_loss_fake.append(dis_loss_fake.mean())
+    list_dis_loss_total.append(dis_loss_real.mean()+dis_loss_fake.mean())
     list_gan_loss_total.append(gan_loss_total.mean())
     list_gan_loss_bce.append(gan_loss_bce.mean())
     list_gan_loss_mae.append(gan_loss_mae.mean())
     #validation statistics    
-    list_val_gan_loss_total.append(val_gan_loss_total.mean())
     list_val_gan_loss_bce.append(val_gan_loss_bce.mean())
     list_val_gan_loss_mae.append(val_gan_loss_mae.mean())
+    list_val_gan_loss_total.append(val_gan_loss_total.mean())
     
     #save model if it improves validation set performance
-    val_loss = val_gan_loss_total.mean()
+    #val_loss = val_gan_loss_total.mean()
+    val_loss = val_gan_loss_mae.mean()
     print('done in',str(np.round(end-start,2))+'s')
     #print(str(np.round(end-start,2))+'s, end of epoch',e+1)
     if val_loss < best_val_loss:
         print('val_loss improved from ',np.round(best_val_loss,3),'to',np.round(val_loss,3))
         best_val_loss = val_loss
-        print('saving generator to '+'./trained_models/'+filepath+'.hdf5')
-        gen_model.save('./trained_models/'+filepath+'.hdf5')
+        print('saving generator to '+'./trained_models/'+'gen_'+filepath+'.hdf5')
+        gen_model.save('./trained_models/'+'gen_'+filepath+'_bestVal.hdf5')
         patience=0#reset patience since valid loss improved
     else:
         patience=patience+1
@@ -459,21 +509,34 @@ for e in range(n_epochs):
     
     #% save training statistics
     od = OrderedDict()
-    od['epoch']=list_epochs
+    od['epoch']=list_epoch
     od['epoch_duration']=list_epoch_duration
-    od['dis_loss']=list_dis_loss
-    od['gan_loss_total']=list_gan_loss_total
+    od['dis_loss_real']=list_dis_loss_real
+    od['dis_loss_fake']=list_dis_loss_fake
+    od['dis_loss_total']=list_dis_loss_total
     od['gan_loss_bce']=list_gan_loss_bce
     od['gan_loss_mae']=list_gan_loss_mae
-    od['val_gan_loss_total']=list_val_gan_loss_total
+    od['gan_loss_total']=list_gan_loss_total
     od['val_gan_loss_bce']=list_val_gan_loss_bce
     od['val_gan_loss_mae']=list_val_gan_loss_mae
+    od['val_gan_loss_total']=list_val_gan_loss_total
     df = pd.DataFrame(od, columns=od.keys())
     df.to_csv('./trained_models/'+filepath+'.csv',index=False)
     
-    #stop if patience limit is exceeded
-    if patience > max_patience:
-        print('Run out of patience!')
-        break
+    if (e % save_epochs == 0) and (e>0):
+        #save backup of generator
+        gen_model.save('./trained_models/'+'gen_'+filepath+'_ep'+str(e)+'.hdf5')
+    else:
+        #save last model to allow training to resume
+        #save the generator
+        gen_model.save('./trained_models/'+'gen_'+filepath+'_last.hdf5')
+        #save the discriminator
+        dis_model.save('./trained_models/'+'dis_'+filepath+'_last.hdf5')
+    
+    if early_stopping == True:
+        #stop if patience limit is exceeded
+        if patience > max_patience:
+            print('Run out of patience!')
+            break
 
 
