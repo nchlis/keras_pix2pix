@@ -62,48 +62,20 @@ def add_colorbar(im, aspect=20, pad_fraction=0.5, **kwargs):
 IMG_SHAPE = load_split_normalize_img(fnames_ts[0])[0].shape #(400, 400, 3)
 
 #initialize empty matrices to load images
-n_images = 10 #how many test images to load
+n_images = 20 #how many test images to load
 X_ts = np.zeros((n_images,)+IMG_SHAPE)
 Y_ts = np.zeros((n_images,)+IMG_SHAPE)
 for i in np.arange(n_images):
     X_ts[i,:,:,:], Y_ts[i,:,:,:] = load_split_normalize_img(fnames_ts[i])
 
-#%% specify resize factor
+#%%
+#modelname = 'gen_pix2pix_RF1.0_disRF1.0_batchSize16_earlyStoppingFalse_last'
+#modelname = 'gen_pix2pix_RF1.0_disRF1.0_batchSize1_earlyStoppingFalse_last'
+#modelname = 'gen_pix2pix_RF1.0_disRF1.0_batchSize1_earlyStoppingFalse_ep100'
+modelname = 'gen_pix2pix_RF1.0_disRF1.0_batchSize1_earlyStoppingFalse_ep150'
+#modelname = 'gen_pix2pix_RF1.0_disRF1.0_batchSize1_earlyStoppingFalse_bestVal'
+#modelname = 'gen_pix2pix_RF0.5_disRF0.5_batchSize1_earlyStoppingFalse_ep100'#a bit before ep 200 something goes wrong
 
-#resize_factor_gen  = 2.0
-#resize_factor_dis  = 2.0
-
-#resize_factor_gen  = 1.5
-#resize_factor_dis  = 1.5
-
-resize_factor_gen  = 1.0
-resize_factor_dis  = 1.0
-    
-#resize_factor_gen  = 0.5
-#resize_factor_dis  = 0.5
-
-#resize_factor_gen  = 0.25
-#resize_factor_dis  = 0.25
-
-#%% specify and evaluate model
-
-modelname = 'pix2pix_genRF'+str(np.round(resize_factor_gen,3))+'_disRF'+str(np.round(resize_factor_dis,3))
-model = load_model('./trained_models/'+modelname+'.hdf5')
-Y_ts_hat = model.predict(X_ts)
-M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
-mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
-
-#%% specify and evaluate model
-
-modelname = 'pix2pix_genRF'+str(np.round(resize_factor_gen,3))+'_disRF'+str(np.round(resize_factor_dis,3))+'_ep64'
-model = load_model('./trained_models/'+modelname+'.hdf5')
-Y_ts_hat = model.predict(X_ts)
-M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
-mae_pixel=np.mean(M.flatten())#pixel level mae on the test subset
-
-#%% specify and evaluate model
-
-modelname = 'pix2pix_genRF'+str(np.round(resize_factor_gen,3))+'_disRF'+str(np.round(resize_factor_dis,3))+'_last'
 model = load_model('./trained_models/'+modelname+'.hdf5')
 Y_ts_hat = model.predict(X_ts)
 M=np.abs(tanh_to_sigmoid_range(Y_ts)-tanh_to_sigmoid_range(Y_ts_hat))
@@ -180,34 +152,3 @@ for i in range(n_images):
     add_colorbar(im)
     
 plt.savefig('./figures/'+modelname+'_MAE_'+str(np.round(mae_pixel,3))+'.png',bbox_inches='tight',dpi=100)
-
-#%% output in [0,1]
-#fig, axes = plt.subplots(n_images,4,figsize=(4*4,n_images*4))
-#for i in range(n_images):
-#    print(i)
-#    ax=axes[i,0]
-#    ax.set_title('Satellite')
-#    ax.imshow(X_ts[i,:,:,:])
-#    #ax.set_xticks(np.arange(0,401,100))
-#    #ax.set_yticks(np.arange(0,401,100))
-#    
-#    ax=axes[i,1]
-#    ax.set_title('Map - True')
-#    ax.imshow(Y_ts[i,:,:,:])
-#    #ax.set_xticks(np.arange(0,401,100))
-#    #ax.set_yticks(np.arange(0,401,100))
-#    
-#    ax=axes[i,2]
-#    ax.set_title('Map - Predicted')
-#    ax.imshow(Y_ts_hat[i,:,:,:])
-#    #ax.set_xticks(np.arange(0,401,100))
-#    #ax.set_yticks(np.arange(0,401,100))
-#    
-#    ax=axes[i,3]
-#    ax.set_title('Map - Error: '+str(np.round(M[i,:,:,:].mean(axis=-1).flatten().mean(),3)))#averaged over channels and pixels
-#    im = ax.imshow(M[i,:,:,:].mean(axis=-1),cmap='gray')
-#    #ax.set_xticks(np.arange(0,401,100))
-#    #ax.set_yticks(np.arange(0,401,100))
-#    add_colorbar(im)
-#    
-#plt.savefig('./figures/'+modelname+'_MAE_'+str(np.round(mae_pixel,3))+'.png',bbox_inches='tight',dpi=100)

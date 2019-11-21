@@ -174,12 +174,12 @@ def aug_generator(fnames=None,
             #print('step end after',b,'of',len(ix_batches))
 
 #%% initialize the generator
-gen_train = aug_generator(fnames_tr,batch_size=10,flip_axes=['x','y'])
-
-
-#plot the augmentations
-X_batch, Y_batch = next(gen_train)
-Nbatch=len(X_batch)
+#gen_train = aug_generator(fnames_tr,batch_size=10,flip_axes=['x','y'])
+#
+#
+##plot the augmentations
+#X_batch, Y_batch = next(gen_train)
+#Nbatch=len(X_batch)
 
 #%% print a few example images
 #fig, axes = plt.subplots(Nbatch,2,figsize=(2*6,Nbatch*6))
@@ -322,11 +322,11 @@ def get_gan(g_model, d_model, image_shape):
 #resize_factor_gen  = 1.5
 #resize_factor_dis  = 1.5
 
-resize_factor_gen  = 1.0
-resize_factor_dis  = 1.0
+#resize_factor_gen  = 1.0
+#resize_factor_dis  = 1.0
     
-#resize_factor_gen  = 0.5
-#resize_factor_dis  = 0.5
+resize_factor_gen  = 0.5
+resize_factor_dis  = 0.5
 
 #resize_factor_gen  = 0.25
 #resize_factor_dis  = 0.25
@@ -334,11 +334,14 @@ resize_factor_dis  = 1.0
 #%% set up model training parameters
 
 batch_size=1#define the batch size
+#batch_size=16#define the batch size
+#batch_size=32#define the batch size
+
 n_epochs=200#total number of epochs to train for
-save_epochs=25#save a model instance periodically every 'save_epochs'
+save_epochs=50#save a model instance periodically every 'save_epochs'
 early_stopping=False
 max_patience = n_epochs#epochs without improvement to wait, only matters if early_stopping==True
-resume_training=True#resume training an existing model
+resume_training=False#resume training an existing model
 
 #generator to get training data
 gen_train = aug_generator(fnames_tr,batch_size=batch_size,flip_axes=['x','y'],rotation_angles=[5,15])
@@ -426,7 +429,7 @@ print(gan_model.summary())
 # determine the output square shape of the discriminator
 patch_shape = dis_model.output_shape[1]
 #get real targets for the discriminator
-T_batch_true = np.ones((batch_size, patch_shape, patch_shape, 1))
+T_batch_real = np.ones((batch_size, patch_shape, patch_shape, 1))
 #get fake targets for the discriminator
 T_batch_fake = np.zeros((batch_size, patch_shape, patch_shape, 1))
 #initialize the patience parameter
@@ -450,8 +453,18 @@ for e in np.arange(epoch_start,epoch_end):
         #print('--batch',b+1,'of',batches_per_epoch)
         #get true image pairs and labels
         X_batch, Y_batch = next(gen_train)
+        #if the dimensions don't fit, redo the targets
+        #the batch size of the generator might vary if it does not divide perfectly the total number of datapoints
+        #that is, if len(fnames_tr) % batch_size != 0
+        if(T_batch_real.shape[0])!=(X_batch.shape[0]):
+            #print('T_batch_real.shape:',T_batch_real.shape)
+            #print('X_batch.shape:',X_batch.shape)
+            #get real targets for the discriminator
+            T_batch_real = np.ones((X_batch.shape[0], patch_shape, patch_shape, 1))
+            #get fake targets for the discriminator
+            T_batch_fake = np.zeros((X_batch.shape[0], patch_shape, patch_shape, 1))
         #train discriminator on true samples
-        dis_loss_real[b] = dis_model.train_on_batch([X_batch, Y_batch], T_batch_true)
+        dis_loss_real[b] = dis_model.train_on_batch([X_batch, Y_batch], T_batch_real)
         
         #get fake image pairs and labels
         #X_batch_fake = gen_model.predict(X_batch)
@@ -462,17 +475,26 @@ for e in np.arange(epoch_start,epoch_end):
         
         #train the gan
         #Note: the generator is only indirectly trained through the gan
-        gan_loss_total[b], gan_loss_bce[b], gan_loss_mae[b] = gan_model.train_on_batch(X_batch, [T_batch_true, Y_batch])
+        gan_loss_total[b], gan_loss_bce[b], gan_loss_mae[b] = gan_model.train_on_batch(X_batch, [T_batch_real, Y_batch])
     
     #initialize epoch statistics for the validation set
     val_gan_loss_bce=np.zeros(batches_per_epoch_val)
     val_gan_loss_mae=np.zeros(batches_per_epoch_val)
     val_gan_loss_total=np.zeros(batches_per_epoch_val)
     
+    #print('validating...')
     #evaluate on the validation set
     for b in range(batches_per_epoch_val):
         X_batch, Y_batch = next(gen_val)
-        val_gan_loss_total[b], val_gan_loss_bce[b], val_gan_loss_mae[b] = gan_model.test_on_batch(X_batch, [T_batch_true, Y_batch])
+        #if the dimensions don't fit, redo the targets
+        #the batch size of the generator might vary if it does not divide perfectly the total number of datapoints
+        #that is, if len(fnames_tr) % batch_size != 0
+        if(T_batch_real.shape[0])!=(X_batch.shape[0]):
+            #print('T_batch_real.shape:',T_batch_real.shape)
+            #print('X_batch.shape:',X_batch.shape)
+            #get real targets for the discriminator
+            T_batch_real = np.ones((X_batch.shape[0], patch_shape, patch_shape, 1))
+        val_gan_loss_total[b], val_gan_loss_bce[b], val_gan_loss_mae[b] = gan_model.test_on_batch(X_batch, [T_batch_real, Y_batch])
         
     end=time.time()
     #keep statistics
@@ -496,7 +518,7 @@ for e in np.arange(epoch_start,epoch_end):
     print('done in',str(np.round(end-start,2))+'s')
     #print(str(np.round(end-start,2))+'s, end of epoch',e+1)
     if val_loss < best_val_loss:
-        print('val_loss improved from ',np.round(best_val_loss,3),'to',np.round(val_loss,3))
+        print('val_loss_mae improved from ',np.round(best_val_loss,3),'to',np.round(val_loss,3))
         best_val_loss = val_loss
         print('saving generator to '+'./trained_models/'+'gen_'+filepath+'.hdf5')
         gen_model.save('./trained_models/'+'gen_'+filepath+'_bestVal.hdf5')
@@ -505,7 +527,7 @@ for e in np.arange(epoch_start,epoch_end):
         patience=patience+1
     
     #print statistics for this epoch
-    print('loss:',gan_loss_total.mean(),'val_loss:',val_loss)
+    print('loss_mae:',gan_loss_mae.mean(),'val_loss:',val_loss)
     
     #% save training statistics
     od = OrderedDict()
