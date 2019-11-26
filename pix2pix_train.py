@@ -316,8 +316,8 @@ def get_gan(g_model, d_model, image_shape):
 
 #%% setup the models
 
-#resize_factor_gen  = 2.0
-#resize_factor_dis  = 2.0
+resize_factor_gen  = 2.0
+resize_factor_dis  = 2.0
 
 #resize_factor_gen  = 1.5
 #resize_factor_dis  = 1.5
@@ -325,8 +325,8 @@ def get_gan(g_model, d_model, image_shape):
 #resize_factor_gen  = 1.0
 #resize_factor_dis  = 1.0
     
-resize_factor_gen  = 0.5
-resize_factor_dis  = 0.5
+#resize_factor_gen  = 0.5
+#resize_factor_dis  = 0.5
 
 #resize_factor_gen  = 0.25
 #resize_factor_dis  = 0.25
